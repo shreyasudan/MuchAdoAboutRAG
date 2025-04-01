@@ -1,14 +1,13 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import nltk
 import os
-from nltk.corpus import gutenberg
-from sentence_transformers import SentenceTransformer
-from sklearn.metrics.pairwise import cosine_similarity
+import re
+import json
 from openai import OpenAI
 from dotenv import load_dotenv
-import re
+import requests
+from pathlib import Path
 
 # Load environment variables
 load_dotenv()
@@ -29,36 +28,52 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Download NLTK data on startup
-@app.on_event("startup")
-async def startup_event():
-    nltk.download('gutenberg', quiet=True)
-    print("NLTK data downloaded successfully")
+# Initialize paths and variables
+DATA_DIR = Path("data")
+DATA_DIR.mkdir(exist_ok=True)
+HAMLET_FILE = DATA_DIR / "hamlet.txt"
+CHUNKS_FILE = DATA_DIR / "hamlet_chunks.json"
 
-# Load Hamlet text and prepare chunks
+# Load or download Hamlet text
 @app.on_event("startup")
 async def load_hamlet():
-    global chunks, chunk_embeddings
+    global chunks
     
-    # Load the text
-    hamlet_text = gutenberg.raw('shakespeare-hamlet.txt')
+    # Download Hamlet if needed
+    if not HAMLET_FILE.exists():
+        print("Downloading Hamlet text...")
+        url = "https://www.gutenberg.org/files/1524/1524-0.txt"
+        response = requests.get(url)
+        response.raise_for_status()
+        
+        text = response.text
+        # Clean up the Project Gutenberg header/footer
+        text = re.sub(r'^.*?ACT I\.', 'ACT I.', text, flags=re.DOTALL)
+        text = re.sub(r'THE END.*$', 'THE END.', text, flags=re.DOTALL)
+        
+        with open(HAMLET_FILE, "w", encoding="utf-8") as f:
+            f.write(text)
+        print("Hamlet text downloaded and saved.")
+    else:
+        print("Loading existing Hamlet text file.")
+        with open(HAMLET_FILE, "r", encoding="utf-8") as f:
+            text = f.read()
     
-    # Advanced chunking by scenes or structure
-    chunks = chunk_by_scenes(hamlet_text)
-    
-    # Initialize the embedding model
-    model = SentenceTransformer("all-MiniLM-L6-v2")
-    
-    # Generate embeddings for all chunks
-    chunk_embeddings = model.encode(chunks, show_progress_bar=True)
+    # Use pre-chunked data or create basic chunks
+    if CHUNKS_FILE.exists():
+        print("Loading pre-chunked data...")
+        with open(CHUNKS_FILE, "r", encoding="utf-8") as f:
+            chunks = json.load(f)
+    else:
+        print("Creating basic chunks...")
+        chunks = chunk_by_scenes(text)
+        with open(CHUNKS_FILE, "w", encoding="utf-8") as f:
+            json.dump(chunks, f, indent=2)
     
     print(f"Loaded {len(chunks)} chunks from Hamlet")
 
-# Function to chunk the text by scenes or dramatic structure
+# Function to chunk the text by scenes
 def chunk_by_scenes(text, max_chunk_size=1500):
-    # Remove the initial metadata
-    text = re.sub(r'^.*?ACT I\.', 'ACT I.', text, flags=re.DOTALL)
-    
     # Split by acts/scenes
     scene_pattern = re.compile(r'(ACT [IVX]+\.\s+SCENE [IVX]+\.)', re.DOTALL)
     scenes = scene_pattern.split(text)
@@ -84,6 +99,30 @@ def chunk_by_scenes(text, max_chunk_size=1500):
     
     return chunks
 
+# Simple in-memory keyword search (no embeddings)
+def keyword_search(query, chunks, top_k=3):
+    # Convert query to lowercase and split into keywords
+    keywords = query.lower().split()
+    
+    # Score each chunk by keyword matches
+    chunk_scores = []
+    for idx, chunk in enumerate(chunks):
+        chunk_lower = chunk.lower()
+        score = sum(1 for keyword in keywords if keyword in chunk_lower)
+        chunk_scores.append((idx, score))
+    
+    # Sort by score and get top_k
+    chunk_scores.sort(key=lambda x: x[1], reverse=True)
+    top_chunks = [chunks[idx] for idx, score in chunk_scores[:top_k] if score > 0]
+    
+    # If no matches, return random chunks
+    if not top_chunks:
+        import random
+        random_indices = random.sample(range(len(chunks)), min(top_k, len(chunks)))
+        top_chunks = [chunks[idx] for idx in random_indices]
+    
+    return top_chunks
+
 # Initialize OpenAI client
 openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -96,23 +135,14 @@ class QueryResponse(BaseModel):
 
 @app.post("/query", response_model=QueryResponse)
 async def query_hamlet(request: QueryRequest):
-    global chunks, chunk_embeddings
+    global chunks
     
     if not request.question:
         raise HTTPException(status_code=400, detail="Question cannot be empty")
     
     try:
-        # Encode the query
-        model = SentenceTransformer("all-MiniLM-L6-v2")
-        query_embedding = model.encode([request.question])[0]
-        
-        # Calculate similarity with all chunks
-        similarities = cosine_similarity([query_embedding], chunk_embeddings)[0]
-        
-        # Get top 3 most relevant chunks
-        top_k = 3
-        top_indices = similarities.argsort()[-top_k:][::-1]
-        relevant_chunks = [chunks[i] for i in top_indices]
+        # Get relevant chunks using simple keyword search
+        relevant_chunks = keyword_search(request.question, chunks)
         
         # Format the context for the LLM
         formatted_context = "\n\n".join(relevant_chunks)

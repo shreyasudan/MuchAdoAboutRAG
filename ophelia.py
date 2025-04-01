@@ -40,16 +40,83 @@ class TextChunker:
         return chunks
 
 class VectorStore:
-    def __init__(self, model_name="all-MiniLM-L6-v2", persist_path="."):
+    def __init__(self, model_name="all-MiniLM-L6-v2", persist_path="./vector_db"):
         self.model = SentenceTransformer(model_name)
-        self.client = chromadb.Client(Settings(persist_directory=persist_path))
+        self.persist_path = persist_path
+        
+        # Create directory if it doesn't exist
+        os.makedirs(persist_path, exist_ok=True)
+        
+        # Initialize the client with persistence
+        self.client = chromadb.PersistentClient(path=persist_path)
         self.collection = None
+        
+        # Initialize embedding cache
+        self.embedding_cache = {}
+        self.model_name = model_name
+        
+        # Load cached embeddings if available
+        self._load_embedding_cache()
+    
+    def _cache_path(self):
+        """Get the path for the embedding cache file."""
+        return os.path.join(self.persist_path, f"embedding_cache_{self.model_name.replace('/', '_')}.pkl")
+    
+    def _load_embedding_cache(self):
+        """Load embedding cache from disk if it exists."""
+        cache_path = self._cache_path()
+        if os.path.exists(cache_path):
+            try:
+                import pickle
+                with open(cache_path, 'rb') as f:
+                    self.embedding_cache = pickle.load(f)
+                print(f"Loaded {len(self.embedding_cache)} cached embeddings")
+            except Exception as e:
+                print(f"Failed to load embedding cache: {e}")
+                self.embedding_cache = {}
+    
+    def _save_embedding_cache(self):
+        """Save embedding cache to disk."""
+        cache_path = self._cache_path()
+        try:
+            import pickle
+            with open(cache_path, 'wb') as f:
+                pickle.dump(self.embedding_cache, f)
+            print(f"Saved {len(self.embedding_cache)} embeddings to cache")
+        except Exception as e:
+            print(f"Failed to save embedding cache: {e}")
+    
+    def get_embedding(self, text):
+        """Get embedding with caching."""
+        # Use a hash of the text as the cache key
+        import hashlib
+        text_hash = hashlib.md5(text.encode()).hexdigest()
+        
+        if text_hash in self.embedding_cache:
+            return self.embedding_cache[text_hash]
+        
+        # Generate new embedding
+        embedding = self.model.encode(text)
+        
+        # Cache it
+        self.embedding_cache[text_hash] = embedding
+        
+        # Save periodically (every 100 new embeddings)
+        if len(self.embedding_cache) % 100 == 0:
+            self._save_embedding_cache()
+            
+        return embedding
     
     def create_collection(self, collection_name):
-        self.collection = self.client.create_collection(collection_name)
-        return self.collection
+        """Create a new collection."""
+        # Check if collection exists first
+        try:
+            return self.client.get_collection(collection_name)
+        except:
+            return self.client.create_collection(collection_name)
     
     def get_collection(self, collection_name):
+        """Get or create a collection."""
         try:
             self.collection = self.client.get_collection(collection_name)
         except:
@@ -57,25 +124,60 @@ class VectorStore:
         return self.collection
     
     def index_documents(self, chunks, collection_name="document_chunks"):
+        """Index documents with cached embeddings."""
+        print(f"Indexing {len(chunks)} documents into collection '{collection_name}'...")
         self.get_collection(collection_name)
         
-        # Generate embeddings
-        embeddings = self.model.encode(chunks, show_progress_bar=True)
+        # Check if documents are already indexed
+        existing_ids = set()
+        try:
+            existing_count = self.collection.count()
+            if existing_count > 0:
+                print(f"Found {existing_count} existing documents in collection")
+                # Get existing IDs
+                existing_ids = set(self.collection.get()["ids"])
+        except Exception as e:
+            print(f"Error checking existing documents: {e}")
+        
+        # Generate new IDs for chunks
+        doc_ids = [f"chunk_{i}" for i in range(len(chunks))]
+        
+        # Find which chunks need to be indexed
+        new_indices = [i for i, doc_id in enumerate(doc_ids) if doc_id not in existing_ids]
+        
+        if not new_indices:
+            print("All documents already indexed.")
+            return
+        
+        new_chunks = [chunks[i] for i in new_indices]
+        new_ids = [doc_ids[i] for i in new_indices]
+        
+        print(f"Generating embeddings for {len(new_chunks)} new documents...")
+        
+        # Generate embeddings with cache
+        embeddings = []
+        for chunk in new_chunks:
+            embedding = self.get_embedding(chunk)
+            embeddings.append(embedding.tolist())
         
         # Add to collection
         self.collection.add(
-            documents=chunks,
-            embeddings=embeddings.tolist(),
-            ids=[f"chunk_{i}" for i in range(len(chunks))]
+            documents=new_chunks,
+            embeddings=embeddings,
+            ids=new_ids
         )
         
-        print(f"Indexed {len(chunks)} chunks into collection '{collection_name}'")
+        # Save cache after indexing
+        self._save_embedding_cache()
+        
+        print(f"Indexed {len(new_chunks)} new documents into collection '{collection_name}'")
     
     def retrieve(self, query, top_k=3):
+        """Retrieve relevant documents."""
         if not self.collection:
             raise ValueError("No collection selected. Call get_collection() first.")
         
-        # Embed the query
+        # Embed the query (without caching, as queries change often)
         query_embedding = self.model.encode([query])
         
         # Query for similar chunks
@@ -102,7 +204,7 @@ class LLMGenerator:
     def generate(self, query, context, model="gpt-3.5-turbo-instruct"):
         system_prompt = (
             "You are a helpful assistant that uses the text provided to answer questions.\n"
-            "If you don't have enough information, say so. If you do, answer succinctly.\n\n"
+            "If you don't have enough information, say so. If you do, answer comprehensively.\n\n"
         )
         
         # Combine all context chunks
@@ -118,7 +220,7 @@ class LLMGenerator:
         response = self.client.completions.create(
             model=model,
             prompt=prompt,
-            max_tokens=200,
+            max_tokens=500,
             temperature=0.7
         )
         
@@ -243,16 +345,24 @@ class ShakespeareChunker:
         return chunks
 
 class RAGPipeline:
-    def __init__(self, source_text=None, collection_name="hamlet_chunks", use_shakespeare_chunker=True):
+    def __init__(self, source_text=None, collection_name="hamlet_chunks", use_shakespeare_chunker=True, 
+                 persist_path="./vector_db"):
         # Use Shakespeare-specific chunker if requested
         self.chunker = ShakespeareChunker() if use_shakespeare_chunker else TextChunker()
-        self.vector_store = VectorStore()
+        self.vector_store = VectorStore(persist_path=persist_path)
         self.generator = LLMGenerator()
         self.collection_name = collection_name
         
         # If source text is provided, initialize the system
         if source_text:
             self.initialize(source_text)
+        else:
+            # Try to load existing collection
+            try:
+                self.vector_store.get_collection(self.collection_name)
+                print(f"Successfully loaded existing collection '{self.collection_name}'")
+            except Exception as e:
+                print(f"Failed to load collection: {e}")
     
     def initialize(self, source_text):
         print("Chunking text...")
@@ -299,26 +409,44 @@ class RAGPipeline:
                 
                 print("\n----- Retrieved Context -----")
                 for i, chunk in enumerate(result["chunks"], 1):
-                    print(f"Chunk {i}: {chunk[:100]}...")
+                    # Show a snippet of each chunk (first 100 chars)
+                    print(f"Chunk {i}: {chunk[:100].replace('\n', ' ')}...")
                 
                 print("\n----- Answer -----")
+                # Print the full answer
                 print(result["answer"])
                 
             except Exception as e:
                 print(f"Error: {e}")
+                import traceback
+                traceback.print_exc()
 
 
 def main():
     # Download NLTK data if needed
     nltk.download('gutenberg')
     
-    # Load Hamlet
-    print("Loading Hamlet text...")
-    hamlet_text = gutenberg.raw('shakespeare-hamlet.txt')
+    persist_path = "./hamlet_vector_db"
+    collection_name = "hamlet_chunks"
     
-    # Create and initialize the RAG pipeline with Shakespeare-specific chunking
-    print("Initializing RAG pipeline with Shakespeare-specific text chunking...")
-    rag = RAGPipeline(hamlet_text, use_shakespeare_chunker=True)
+    # Check if we already have a persisted database
+    if os.path.exists(persist_path) and os.listdir(persist_path):
+        print(f"Found existing vector database at {persist_path}")
+        # Just load the existing data
+        rag = RAGPipeline(collection_name=collection_name, persist_path=persist_path)
+    else:
+        # Load Hamlet and create a new database
+        print("Loading Hamlet text...")
+        hamlet_text = gutenberg.raw('shakespeare-hamlet.txt')
+        
+        # Create and initialize the RAG pipeline
+        print("Initializing RAG pipeline with Shakespeare-specific text chunking...")
+        rag = RAGPipeline(
+            hamlet_text, 
+            collection_name=collection_name,
+            use_shakespeare_chunker=True,
+            persist_path=persist_path
+        )
     
     # Start interactive mode
     rag.interactive_mode()

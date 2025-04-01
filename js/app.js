@@ -1,7 +1,6 @@
 document.addEventListener('DOMContentLoaded', function() {
     // Constants
-    const API_ENDPOINT = 'https://your-backend-url.com/query'; // Replace with your actual API endpoint
-    
+    const API_ENDPOINT = 'https://muchadoaboutrag.onrender.com/query';    
     // DOM Elements
     const questionInput = document.getElementById('question-input');
     const askButton = document.getElementById('ask-button');

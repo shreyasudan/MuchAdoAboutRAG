@@ -1,156 +1,399 @@
-/* Dark / Red Shakespearean Theme  
-   SELECTED PALETTE:
-   background: #1E1E1E (dark gray/black)
-   text: #ECECEC or #EDEDED
-   accent red: #B22222
+/* Elegant Grey / Rustic-Red Shakespearean Theme
+   BACKGROUND: #F5F5F5 (light elegant grey, similar to the artist portfolio)
+   TEXT: #333333 (dark grey for contrast)
+   ACCENT RUSTIC RED: #8B3A3A
+   FONT: Cormorant Garamond
 */
 
-/* Use the Shakespearean font (Cormorant Garamond) */
 body {
-  background-color: #1E1E1E;
-  font-family: "Cormorant Garamond", serif;
-  color: #EDEDED;
-  overflow-x: hidden;
-}
-
-/* Basic classes for text colors */
-.text-red {
-  color: #B22222 !important;
-}
-.btn-red {
-  background-color: #B22222;
-  border-color: #B22222;
-}
-.btn-red:hover {
-  background-color: #a01f1f;
-  border-color: #a01f1f;
-}
-
-/* Dark horizontal rule */
-.hr-dark {
-  border-top: 1px solid #444;
-}
-
-/* Sidebar styling */
-.sidebar {
-  background-color: #111;
-  border-right: 1px solid #444;
-  box-shadow: 4px 0 10px rgba(0, 0, 0, 0.4);
-  z-index: 1000;
-  position: relative;
-}
-
-/* Sidebar header */
-.sidebar-header {
-  color: #EDEDED;
-  background-color: #B22222;
-  border-bottom: 1px solid #444;
-  position: relative;
-}
-
-/* History list */
-.history-list {
-  border: none;
-  background-color: transparent;
-}
-
-.history-list .list-group-item {
-  background-color: #111;
-  color: #EDEDED;
-  border: none;
-  border-left: 3px solid transparent;
-  transition: background-color 0.2s ease;
-}
-
-.history-list .list-group-item:hover {
-  background-color: #1e1e1e;
-  border-left-color: #B22222;
-}
-
-/* Mobile sidebar toggle */
-.sidebar-toggle-btn {
-  position: absolute;
-  right: -30px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 30px;
-  height: 60px;
-  background-color: #111;
-  border: 1px solid #444;
-  border-left: none;
-  border-radius: 0 5px 5px 0;
-  box-shadow: 3px 0 5px rgba(0, 0, 0, 0.4);
-  z-index: 1001;
-  transition: transform 0.3s ease;
-}
-.sidebar-hidden {
-  transform: translateX(-100%);
-}
-
-/* Main content */
-.main-content {
-  min-height: 100vh;
-  transition: margin-left 0.3s ease;
-}
-
-/* Card / container styling */
-.card.bg-dark {
-  background-color: #2a2a2a !important;
-  border: 1px solid #444;
-}
-.card-header.bg-secondary,
-.card-footer.bg-secondary {
-  background-color: #333 !important;
-}
-.input-group .form-control.bg-secondary {
-  border-color: #444;
-}
-
-/* Suggestions */
-.search-suggestions {
-  position: absolute;
-  width: 100%;
-  border: 1px solid #444;
-  border-top: none;
-  border-radius: 0 0 5px 5px;
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-  margin-top: 5px;
-  z-index: 1000;
-  max-height: 240px;
-  overflow-y: auto;
-  transition: all 0.2s ease;
-}
-
-.suggestions-header {
-  background-color: #2a2a2a;
-}
-.suggestion-item {
-  padding: 10px 15px;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-.suggestion-item:hover {
-  background-color: #3a3a3a;
-}
-
-/* Loading spinner color override */
-.spinner-border.text-red {
-  color: #B22222 !important;
-}
-
-/* Chat answer display */
-#answer-display {
-  white-space: pre-line;
-  line-height: 1.6;
-}
-
-/* Responsive design */
-@media (max-width: 767.98px) {
+    background-color: #F5F5F5;
+    font-family: "Cormorant Garamond", serif;
+    color: #333333;
+    overflow-x: hidden;
+  }
+  
+  /* Basic classes for text colors */
+  .text-red {
+    color: #8B3A3A !important;
+  }
+  .btn-red {
+    background-color: #8B3A3A;
+    border-color: #8B3A3A;
+  }
+  .btn-red:hover {
+    background-color: #7A3434;
+    border-color: #7A3434;
+  }
+  
+  /* Light horizontal rule */
+  .hr-dark {
+    border-top: 1px solid #DDDDDD;
+  }
+  
+  /* Sidebar styling - lighter, more elegant */
   .sidebar {
-    width: 80%;
-    max-width: 300px;
+    background-color: #EBEBEB;
+    border-right: 1px solid #DDDDDD;
+    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    position: relative;
   }
+  
+  /* Sidebar header */
+  .sidebar-header {
+    color: #FFFFFF;
+    background-color: #8B3A3A;
+    border-bottom: 1px solid #DDDDDD;
+    position: relative;
+  }
+  
+  /* History list */
+  .history-list {
+    border: none;
+    background-color: transparent;
+  }
+  
+  .history-list .list-group-item {
+    background-color: #EBEBEB;
+    color: #333333;
+    border: none;
+    border-left: 3px solid transparent;
+    transition: background-color 0.2s ease;
+    margin-bottom: 3px;
+  }
+  
+  .history-list .list-group-item:hover {
+    background-color: #E0E0E0;
+    border-left-color: #8B3A3A;
+  }
+  
+  /* Distinguish question vs. snippet */
+  .history-question {
+    font-weight: bold;
+    color: #333333;
+  }
+  .history-snippet {
+    font-style: italic;
+    color: #666666;
+    margin-left: 8px;
+  }
+  
+  /* Mobile sidebar toggle */
+  .sidebar-toggle-btn {
+    position: absolute;
+    right: -30px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 30px;
+    height: 60px;
+    background-color: #EBEBEB;
+    border: 1px solid #DDDDDD;
+    border-left: none;
+    border-radius: 0 5px 5px 0;
+    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+    z-index: 1001;
+    transition: transform 0.3s ease;
+  }
+  .sidebar-hidden {
+    transform: translateX(-100%);
+  }
+  
+  /* Main content */
   .main-content {
-    margin-left: 0 !important;
+    min-height: 100vh;
+    transition: margin-left 0.3s ease;
   }
-} 
+  
+  /* Card / container styling */
+  .card.bg-dark {
+    background-color: #FFFFFF !important;
+    border: 1px solid #DDDDDD;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+  .card-header.bg-secondary,
+  .card-footer.bg-secondary {
+    background-color: #F5F5F5 !important;
+    border-color: #DDDDDD;
+  }
+  .input-group .form-control.bg-secondary {
+    border-color: #DDDDDD;
+    background-color: #FFFFFF;
+    color: #333333;
+  }
+  
+  /* Make the text inside cards dark for better contrast */
+  .card.bg-dark .card-body,
+  .card.bg-dark .card-title,
+  .card.bg-dark .card-text {
+    color: #333333;
+  }
+  
+  /* Input group and search bar styling */
+  .input-group .form-control {
+    background-color: #FFFFFF;
+    border: 1px solid #DDDDDD;
+    color: #333333;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+  }
+  
+  .input-group .form-control:focus {
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1), 0 0 0 0.2rem rgba(139, 58, 58, 0.15);
+    border-color: #8B3A3A;
+  }
+  
+  /* Suggestions dropdown - lighter styling */
+  #search-suggestions {
+    background-color: #FFFFFF;
+    border: 1px solid #DDDDDD;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+  
+  .suggestions-header {
+    background-color: #F5F5F5;
+    border-bottom: 1px solid #DDDDDD;
+    padding: 8px 12px;
+  }
+  
+  .suggestions-header small {
+    color: #666666;
+  }
+  
+  .suggestion-item {
+    background-color: #FFFFFF;
+    color: #333333;
+    padding: 10px 15px;
+    border-bottom: 1px solid #F0F0F0;
+  }
+  
+  .suggestion-item:hover, 
+  .suggestion-item:focus {
+    background-color: #F9F9F9;
+    color: #8B3A3A;
+  }
+  
+  .suggestion-item:last-child {
+    border-bottom: none;
+  }
+  
+  /* Override Bootstrap styles for the search bar within a card */
+  .card.bg-dark .input-group .form-control.bg-secondary {
+    background-color: #FFFFFF !important;
+    color: #333333;
+    border-color: #DDDDDD;
+  }
+  
+  /* Loading spinner color override */
+  .spinner-border.text-red {
+    color: #8B3A3A !important;
+  }
+  
+  /* Chat answer display */
+  #answer-display {
+    white-space: pre-line;
+    line-height: 1.6;
+  }
+  
+  /* Responsive design */
+  @media (max-width: 767.98px) {
+    .sidebar {
+      width: 80%;
+      max-width: 300px;
+    }
+    .main-content {
+      margin-left: 0 !important;
+    }
+  }
+  /* Make lead text darker for better contrast on light background */
+  .lead {
+    color: #333333 !important;
+  }
+
+  /* Overriding Bootstrap dark text for the new light theme */
+  .text-light {
+    color: #333333 !important;
+  }
+
+  /* Add depth to elements */
+  .card {
+    box-shadow: 0 2px 15px rgba(0, 0, 0, 0.1);
+    transition: box-shadow 0.3s ease;
+  }
+  .card:hover {
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.15);
+  }
+
+  /* Increase title size and add emphasis */
+  .main-title {
+    font-size: 3.5rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    margin-bottom: 0.5rem;
+  }
+
+  /* Center the search container */
+  .search-container {
+    max-width: 700px;
+    margin: 0 auto 3rem;
+    padding: 0 1rem;
+  }
+
+  /* Make the search bar bigger */
+  .search-input-group {
+    margin: 0;
+    border: none;
+  }
+
+  .search-input-group .form-control {
+    height: 60px;
+    font-size: 1.25rem;
+    padding-left: 1.5rem;
+    border: none;
+    box-shadow: none;
+  }
+
+  .search-input-group .form-control:focus {
+    box-shadow: none;
+  }
+
+  /* Style the Ask button */
+  .search-input-group .btn-red {
+    color: #FFFFFF;
+    padding: 0.5rem 1.8rem;
+    font-size: 1.1rem;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+  }
+
+  /* Adjust the suggestions to match */
+  .search-suggestions {
+    border: none;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+    border-radius: 0 0 8px 8px;
+    margin-top: 4px;
+  }
+
+  /* Ensure the title has proper spacing */
+  .main-title {
+    margin-bottom: 1.5rem;
+  }
+
+  /* Add more space below the title */
+  .title-subtitle {
+    margin-bottom: 3rem;
+  }
+
+  /* Widen the sidebar */
+  @media (min-width: 768px) {
+    .sidebar-column {
+      width: 320px;
+      flex: 0 0 320px;
+    }
+    
+    .main-content-column {
+      width: calc(100% - 320px);
+      flex: 0 0 calc(100% - 320px);
+      max-width: calc(100% - 320px);
+    }
+  }
+
+  /* Make search suggestions width match the input */
+  .search-suggestions {
+    width: 100%;
+  }
+
+  /* Center title for mobile as well */
+  @media (max-width: 767.98px) {
+    .main-title {
+      font-size: 2.5rem;
+    }
+    
+    .search-container {
+      padding-left: 1rem;
+      padding-right: 1rem;
+    }
+  }
+
+  /* Add emoji scaling */
+  .title-emoji {
+    font-size: 3rem;
+    vertical-align: middle;
+    margin-right: 0.5rem;
+  }
+
+  @media (max-width: 767.98px) {
+    .title-emoji {
+      font-size: 2rem;
+    }
+  }
+
+  /* Increase padding at the top to move elements down */
+  .main-header {
+    padding-top: 6rem;
+    padding-bottom: 3rem;
+  }
+
+  /* Remove border from search container and add better shadow */
+  .search-container {
+    max-width: 700px;
+    margin: 0 auto 3rem;
+    padding: 0 1rem;
+  }
+
+  /* Borderless search input with depth */
+  .borderless-search {
+    border: none;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+    border-radius: 8px;
+    overflow: hidden;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+  }
+
+  .borderless-search:hover {
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+    transform: translateY(-2px);
+  }
+
+  /* Style the search input */
+  .search-input-group {
+    margin: 0;
+    border: none;
+  }
+
+  .search-input-group .form-control {
+    height: 60px;
+    font-size: 1.25rem;
+    padding-left: 1.5rem;
+    border: none;
+    box-shadow: none;
+  }
+
+  .search-input-group .form-control:focus {
+    box-shadow: none;
+  }
+
+  /* Style the Ask button */
+  .search-input-group .btn-red {
+    color: #FFFFFF;
+    padding: 0.5rem 1.8rem;
+    font-size: 1.1rem;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+  }
+
+  /* Adjust the suggestions to match */
+  .search-suggestions {
+    border: none;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+    border-radius: 0 0 8px 8px;
+    margin-top: 4px;
+  }
+
+  /* Ensure the title has proper spacing */
+  .main-title {
+    margin-bottom: 1.5rem;
+  }
+
+  /* Add more space below the title */
+  .title-subtitle {
+    margin-bottom: 3rem;
+  }

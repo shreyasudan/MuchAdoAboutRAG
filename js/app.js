@@ -174,8 +174,11 @@ document.addEventListener('DOMContentLoaded', function() {
   
     function updateHistoryDisplay() {
       if (history.length === 0) {
-        conversationHistory.innerHTML =
-          '<li class="list-group-item text-center text-muted bg-dark text-light">No questions yet</li>';
+        conversationHistory.innerHTML = `
+          <li class="list-group-item empty-history-message">
+            <i class="bi bi-chat-square-text empty-history-icon"></i>
+            No questions yet
+          </li>`;
         return;
       }
   

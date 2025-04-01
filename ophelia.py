@@ -7,6 +7,7 @@ from openai import OpenAI
 from sentence_transformers import SentenceTransformer
 from chromadb.config import Settings
 from nltk.corpus import gutenberg
+import argparse
 
 class TextChunker:
     def __init__(self, max_chars=500):
@@ -266,26 +267,27 @@ class LLMGenerator:
         
         self.client = OpenAI(api_key=api_key)
     
-    def generate(self, query, context, model="gpt-3.5-turbo-instruct"):
+    def generate(self, query, formatted_contexts, model="gpt-3.5-turbo-instruct"):
         system_prompt = (
-            "You are a helpful assistant that uses the text provided to answer questions.\n"
-            "If you don't have enough information, say so. If you do, answer comprehensively.\n\n"
+            "You are a helpful assistant that uses the text provided to answer questions about Shakespeare's Hamlet.\n"
+            "If you don't have enough information, say so. If you do, answer comprehensively.\n"
+            "When you reference parts of the play, mention the Act and Scene numbers.\n\n"
         )
         
         # Combine all context chunks
-        context_text = "\n\n".join(context)
+        context_text = "\n\n".join(formatted_contexts)
         
         prompt = (
             f"{system_prompt}"
             f"Context:\n{context_text}\n\n"
             f"Question: {query}\n\n"
-            "Answer:"
+            "Answer the question using the provided context. Include citations to relevant Acts and Scenes when possible:"
         )
         
         response = self.client.completions.create(
             model=model,
             prompt=prompt,
-            max_tokens=500,
+            max_tokens=600,  # Increased for more detailed answers
             temperature=0.7
         )
         
@@ -454,12 +456,13 @@ class ShakespeareChunker:
 
 class RAGPipeline:
     def __init__(self, source_text=None, collection_name="hamlet_chunks", use_shakespeare_chunker=True, 
-                 persist_path="./vector_db"):
+                 persist_path="./vector_db", use_reranking=True):
         # Use Shakespeare-specific chunker if requested
         self.chunker = ShakespeareChunker() if use_shakespeare_chunker else TextChunker()
         self.vector_store = VectorStore(persist_path=persist_path)
         self.generator = LLMGenerator()
         self.collection_name = collection_name
+        self.use_reranking = use_reranking
         
         # If source text is provided, initialize the system
         if source_text:
@@ -475,11 +478,34 @@ class RAGPipeline:
     def initialize(self, source_text):
         print("Chunking text...")
         chunks, metadata = self.chunker.chunk(source_text)
-        print(f"Created {len(chunks)} chunks")
+        print(f"Created {len(chunks)} chunks with metadata")
         
         print("Indexing chunks...")
         self.vector_store.index_documents(chunks, metadata, self.collection_name)
         print("Indexing complete")
+    
+    def format_context_with_metadata(self, results):
+        """Format context with metadata for better citations."""
+        formatted_contexts = []
+        
+        for i, (doc, metadata) in enumerate(zip(results["documents"], results["metadatas"])):
+            # Create a header with metadata if available
+            if metadata:
+                if metadata.get("act") and metadata.get("scene"):
+                    header = f"--- From Act {metadata['act']}, Scene {metadata['scene']} ---"
+                else:
+                    header = f"--- Chunk {i+1} ---"
+                
+                # If we have character information, include it
+                if metadata.get("characters") and metadata["characters"]:
+                    characters = ", ".join(metadata["characters"])
+                    header += f"\nCharacters present: {characters}"
+                
+                formatted_contexts.append(f"{header}\n{doc}")
+            else:
+                formatted_contexts.append(f"--- Chunk {i+1} ---\n{doc}")
+        
+        return formatted_contexts
     
     def process_query(self, query, top_k=3):
         print(f"Processing query: '{query}'")
@@ -487,17 +513,26 @@ class RAGPipeline:
         # Get the collection
         self.vector_store.get_collection(self.collection_name)
         
-        # Retrieve relevant chunks
+        # Retrieve relevant chunks with re-ranking if enabled
         print(f"Retrieving top {top_k} relevant chunks...")
-        results = self.vector_store.retrieve(query, top_k)
+        results = self.vector_store.retrieve(
+            query, 
+            top_k=top_k,
+            rerank=self.use_reranking, 
+            rerank_top_k=10  # Try re-ranking from top 10
+        )
         
-        # Generate answer
+        # Format context with metadata
+        formatted_contexts = self.format_context_with_metadata(results)
+        
+        # Generate answer with formatted context
         print("Generating answer...")
-        answer = self.generator.generate(query, results["documents"])
+        answer = self.generator.generate(query, formatted_contexts)
         
         return {
             "query": query,
             "results": results,
+            "formatted_contexts": formatted_contexts,
             "answer": answer
         }
     
@@ -516,13 +551,24 @@ class RAGPipeline:
                 result = self.process_query(query)
                 
                 print("\n----- Retrieved Context -----")
-                for i, doc in enumerate(result["results"]["documents"], 1):
-                    # Show a snippet of each document (first 100 chars)
-                    print(f"Document {i}: {doc[:100].replace('\n', ' ')}...")
+                for i, context in enumerate(result["formatted_contexts"], 1):
+                    # Show a snippet of each formatted context
+                    context_preview = context.split("\n", 2)
+                    print(f"{context_preview[0]}")
+                    if len(context_preview) > 1:
+                        print(f"{context_preview[1]}")
+                    print("...")
                 
                 print("\n----- Answer -----")
-                # Print the full answer
                 print(result["answer"])
+                
+                # Optional: Show detailed view command
+                print("\nType 'detail' to see full context or any other question to continue.")
+                follow_up = input("> ")
+                if follow_up.lower() == 'detail':
+                    print("\n===== Detailed Context =====")
+                    for ctx in result["formatted_contexts"]:
+                        print(f"\n{ctx}\n{'='*40}")
                 
             except Exception as e:
                 print(f"Error: {e}")
@@ -531,17 +577,27 @@ class RAGPipeline:
 
 
 def main():
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Hamlet RAG System')
+    parser.add_argument('--no-rerank', action='store_true', help='Disable re-ranking')
+    parser.add_argument('--rebuild', action='store_true', help='Rebuild the vector database')
+    args = parser.parse_args()
+    
     # Download NLTK data if needed
     nltk.download('gutenberg')
     
     persist_path = "./hamlet_vector_db"
     collection_name = "hamlet_chunks"
     
-    # Check if we already have a persisted database
-    if os.path.exists(persist_path) and os.listdir(persist_path):
+    # Check if we already have a persisted database and aren't forcing rebuild
+    if os.path.exists(persist_path) and os.listdir(persist_path) and not args.rebuild:
         print(f"Found existing vector database at {persist_path}")
         # Just load the existing data
-        rag = RAGPipeline(collection_name=collection_name, persist_path=persist_path)
+        rag = RAGPipeline(
+            collection_name=collection_name, 
+            persist_path=persist_path,
+            use_reranking=not args.no_rerank
+        )
     else:
         # Load Hamlet and create a new database
         print("Loading Hamlet text...")
@@ -553,7 +609,8 @@ def main():
             hamlet_text, 
             collection_name=collection_name,
             use_shakespeare_chunker=True,
-            persist_path=persist_path
+            persist_path=persist_path,
+            use_reranking=not args.no_rerank
         )
     
     # Start interactive mode

@@ -4,13 +4,16 @@ from pydantic import BaseModel
 import os
 import re
 import json
-from openai import OpenAI
+import openai  # Use the module directly instead of the class
 from dotenv import load_dotenv
 import requests
 from pathlib import Path
 
 # Load environment variables
 load_dotenv()
+
+# Configure OpenAI
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -123,9 +126,6 @@ def keyword_search(query, chunks, top_k=3):
     
     return top_chunks
 
-# Initialize OpenAI client
-openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
 # Query model
 class QueryRequest(BaseModel):
     question: str
@@ -147,26 +147,26 @@ async def query_hamlet(request: QueryRequest):
         # Format the context for the LLM
         formatted_context = "\n\n".join(relevant_chunks)
         
-        # Generate the answer
-        system_prompt = (
+        # Generate the answer using older OpenAI API
+        system_message = (
             "You are a helpful assistant that answers questions about Shakespeare's Hamlet. "
             "When referencing specific parts of the play, mention Act and Scene numbers. "
             "If you're unsure about something, say so rather than making up information. "
             "Use formal language appropriate for discussing Shakespeare."
         )
         
-        user_prompt = (
+        user_message = (
             f"Based on the following excerpts from Hamlet, answer the question:\n\n"
             f"QUESTION: {request.question}\n\n"
             f"EXCERPTS FROM HAMLET:\n{formatted_context}\n\n"
             f"Provide a thoughtful answer with proper citations to Act and Scene when relevant."
         )
         
-        response = openai_client.chat.completions.create(
+        response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": user_message}
             ],
             max_tokens=600,
             temperature=0.7

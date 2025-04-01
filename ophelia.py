@@ -294,11 +294,20 @@ class ShakespeareChunker:
         return structured_play
     
     def chunk_by_structure(self, text, max_chunk_size=1000):
-        """Split the text by its dramatic structure rather than arbitrary lengths."""
+        """Split the text by its dramatic structure and include metadata."""
         structured_play = self.extract_structure(text)
         chunks = []
+        chunk_metadata = []
         
-        for scene in structured_play:
+        for scene_idx, scene in enumerate(structured_play):
+            # Parse act and scene numbers
+            scene_header = scene["header"]
+            act_match = re.search(r'ACT ([IVX]+)', scene_header)
+            scene_match = re.search(r'SCENE ([IVX]+)', scene_header)
+            
+            act_num = act_match.group(1) if act_match else "Unknown"
+            scene_num = scene_match.group(1) if scene_match else "Unknown"
+            
             # Create identifier for the scene
             scene_id = scene["header"]
             
@@ -306,43 +315,77 @@ class ShakespeareChunker:
             current_chunk = f"{scene_id}\n\n"
             current_length = len(current_chunk)
             
-            for part in scene["parts"]:
+            # Track which characters are in this chunk
+            current_characters = set()
+            chunk_start_idx = 0
+            
+            for part_idx, part in scene["parts"]:
                 part_text = ""
                 if part["type"] == "scene_setting":
                     part_text = f"Setting: {part['content']}\n\n"
                 elif part["type"] == "dialogue":
-                    part_text = f"{part['character']}: {part['content']}\n\n"
+                    character = part['character']
+                    current_characters.add(character)
+                    part_text = f"{character}: {part['content']}\n\n"
                 elif part["type"] == "direction":
                     part_text = f"[Direction: {part['content']}]\n\n"
                 
                 # Check if adding this part would exceed max chunk size
                 if current_length + len(part_text) > max_chunk_size:
-                    # Save current chunk and start a new one
+                    # Save current chunk with its metadata
                     chunks.append(current_chunk.strip())
+                    
+                    # Create metadata for this chunk
+                    metadata = {
+                        "act": act_num,
+                        "scene": scene_num,
+                        "scene_id": scene_id,
+                        "characters": list(current_characters),
+                        "chunk_type": "scene_continuation" if chunk_start_idx > 0 else "scene_start",
+                        "scene_index": scene_idx,
+                        "chunk_index": chunk_start_idx
+                    }
+                    chunk_metadata.append(metadata)
+                    
+                    # Start a new chunk
                     current_chunk = f"(Continued) {scene_id}\n\n{part_text}"
                     current_length = len(current_chunk)
+                    current_characters = {character} if part["type"] == "dialogue" else set()
+                    chunk_start_idx += 1
                 else:
                     current_chunk += part_text
                     current_length += len(part_text)
             
-            # Add the final chunk from this scene
+            # Add the final chunk from this scene with its metadata
             if current_chunk.strip():
                 chunks.append(current_chunk.strip())
+                metadata = {
+                    "act": act_num,
+                    "scene": scene_num,
+                    "scene_id": scene_id,
+                    "characters": list(current_characters),
+                    "chunk_type": "scene_continuation" if chunk_start_idx > 0 else "scene_complete",
+                    "scene_index": scene_idx,
+                    "chunk_index": chunk_start_idx
+                }
+                chunk_metadata.append(metadata)
         
-        return chunks
+        return chunks, chunk_metadata
     
     def chunk(self, text, max_chunk_size=1000):
-        """Main interface method that returns chunks of the play."""
+        """Main interface method that returns chunks of the play with metadata."""
         # First try structural chunking
-        chunks = self.chunk_by_structure(text, max_chunk_size)
+        chunks, metadata = self.chunk_by_structure(text, max_chunk_size)
         
-        # If structural chunking failed or produced too few chunks, fallback to basic chunking
+        # If structural chunking failed, fallback to basic chunking
         if not chunks or len(chunks) < 5:
             print("Structural chunking failed, falling back to basic chunking")
             basic_chunker = TextChunker(max_chunk_size)
             chunks = basic_chunker.chunk(text)
+            # Create basic metadata
+            metadata = [{"chunk_index": i, "chunk_type": "basic"} for i in range(len(chunks))]
         
-        return chunks
+        return chunks, metadata
 
 class RAGPipeline:
     def __init__(self, source_text=None, collection_name="hamlet_chunks", use_shakespeare_chunker=True, 
@@ -366,7 +409,7 @@ class RAGPipeline:
     
     def initialize(self, source_text):
         print("Chunking text...")
-        chunks = self.chunker.chunk(source_text)
+        chunks, metadata = self.chunker.chunk(source_text)
         print(f"Created {len(chunks)} chunks")
         
         print("Indexing chunks...")

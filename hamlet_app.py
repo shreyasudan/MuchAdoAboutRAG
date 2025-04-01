@@ -1,45 +1,26 @@
 import streamlit as st
 import os
 import sys
-import subprocess
-import importlib.util
 
-# Function to check and install missing dependencies
-def install_dependencies():
-    requirements = [
-        'nltk',
-        'sentence-transformers',
-        'chromadb',
-        'openai',
-        'python-dotenv'
-    ]
-    
-    missing = []
-    for package in requirements:
-        if importlib.util.find_spec(package) is None:
-            missing.append(package)
-    
-    if missing:
-        st.warning(f"Installing missing dependencies: {', '.join(missing)}...")
-        for package in missing:
-            subprocess.check_call([sys.executable, "-m", "pip", "install", package])
-        st.success("Dependencies installed successfully! Please refresh the page.")
-        st.stop()
+# Display basic system information
+st.write("Python version:", sys.version)
+st.write("Working directory:", os.getcwd())
 
-# Check and install dependencies
-install_dependencies()
-
-# Now try importing the required modules
+# Try importing required packages
 try:
     import nltk
-    from nltk.corpus import gutenberg
-    from openai import OpenAI
     import chromadb
-    from sentence_transformers import SentenceTransformer
+    from openai import OpenAI
     from dotenv import load_dotenv
+    from nltk.corpus import gutenberg
+    from sentence_transformers import SentenceTransformer
+    
+    # Indicate successful imports
+    st.success("All required packages imported successfully")
+    
 except ImportError as e:
-    st.error(f"Error importing modules: {e}")
-    st.info("Please try refreshing the page. If the error persists, contact the developer.")
+    st.error(f"Error importing required packages: {e}")
+    st.info("Please check that all dependencies are installed properly via requirements.txt")
     st.stop()
 
 # Load environment variables (for local development)
@@ -70,6 +51,38 @@ nltk_download_success = download_nltk_data()
 if not nltk_download_success:
     st.error("Failed to download NLTK data. Please try again later.")
     st.stop()
+
+# Import your RAG pipeline class
+# If ophelia.py is in the same directory, import it directly
+try:
+    # First, add current directory to path
+    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+    
+    # Try to import the RAGPipeline class
+    from ophelia import RAGPipeline
+    st.success("Successfully imported RAGPipeline from ophelia.py")
+    
+except ImportError as e:
+    st.error(f"Error importing RAGPipeline: {e}")
+    st.info("Define the RAGPipeline class directly in this file as a fallback")
+    
+    # FALLBACK: Define a simplified version of your RAG system here
+    # (Copy the essential parts of your RAG system here)
+    
+    # Example placeholder:
+    class RAGPipeline:
+        def __init__(self, source_text=None, collection_name="hamlet_chunks", 
+                     use_shakespeare_chunker=True, persist_path="./vector_db"):
+            st.error("Using placeholder RAGPipeline class - this is not functional")
+            pass
+        
+        def process_query(self, query, top_k=3):
+            return {
+                "answer": "RAG system is not properly initialized. Please check the logs.",
+                "formatted_contexts": ["Context error"]
+            }
+
+# The rest of your Streamlit app code...
 
 # Page configuration
 st.set_page_config(

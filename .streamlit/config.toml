@@ -1,5 +1,12 @@
+[theme]
+primaryColor = "#6eb52f"
+backgroundColor = "#f0f2f6"
+secondaryBackgroundColor = "#e0e0ef"
+textColor = "#262730"
+font = "sans serif"
+
 [server]
-enableCORS = false
+runOnSave = true
 
 [browser]
 serverAddress = "localhost" 

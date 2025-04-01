@@ -124,9 +124,128 @@ class LLMGenerator:
         
         return response.choices[0].text.strip()
 
+class ShakespeareChunker:
+    def __init__(self):
+        self.act_pattern = re.compile(r'ACT [IVX]+\.', re.IGNORECASE)
+        self.scene_pattern = re.compile(r'SCENE [IVX]+\.', re.IGNORECASE)
+        self.character_pattern = re.compile(r'([A-Z]{2,})\.')
+        
+    def extract_structure(self, text):
+        """Extract the structural elements of the play."""
+        # Remove starting metadata about the play
+        cleaned_text = re.sub(r'^.*?ACT I\.', 'ACT I.', text, flags=re.DOTALL)
+        
+        # Split by acts
+        acts = self.act_pattern.split(cleaned_text)
+        acts = [f"ACT {i+1}. {act}" for i, act in enumerate(acts[1:]) if act.strip()]
+        
+        structured_play = []
+        
+        for act in acts:
+            # Split by scenes
+            scenes = self.scene_pattern.split(act)
+            act_num = scenes[0].strip()
+            scenes = [f"{act_num} SCENE {i+1}. {scene}" for i, scene in enumerate(scenes[1:]) if scene.strip()]
+            
+            for scene in scenes:
+                # Extract character dialogues and context
+                scene_parts = []
+                
+                # Get the scene header (location and setup)
+                header_match = re.search(r'^.*?\n\n', scene, re.DOTALL)
+                if header_match:
+                    scene_header = header_match.group(0).strip()
+                    scene_parts.append({
+                        "type": "scene_setting",
+                        "content": scene_header
+                    })
+                
+                # Split dialogue and extract character speeches
+                scene_body = scene[header_match.end():] if header_match else scene
+                dialogues = re.split(r'\n\s*\n', scene_body)
+                
+                for dialogue in dialogues:
+                    # Check if this is a character's speech
+                    char_match = self.character_pattern.match(dialogue)
+                    if char_match:
+                        character = char_match.group(1)
+                        speech = dialogue[char_match.end():].strip()
+                        scene_parts.append({
+                            "type": "dialogue",
+                            "character": character,
+                            "content": speech
+                        })
+                    else:
+                        # This is stage direction or other text
+                        if dialogue.strip():
+                            scene_parts.append({
+                                "type": "direction",
+                                "content": dialogue.strip()
+                            })
+                
+                structured_play.append({
+                    "type": "scene",
+                    "header": scene.split('\n', 1)[0].strip(),
+                    "parts": scene_parts
+                })
+        
+        return structured_play
+    
+    def chunk_by_structure(self, text, max_chunk_size=1000):
+        """Split the text by its dramatic structure rather than arbitrary lengths."""
+        structured_play = self.extract_structure(text)
+        chunks = []
+        
+        for scene in structured_play:
+            # Create identifier for the scene
+            scene_id = scene["header"]
+            
+            # Start with scene setting
+            current_chunk = f"{scene_id}\n\n"
+            current_length = len(current_chunk)
+            
+            for part in scene["parts"]:
+                part_text = ""
+                if part["type"] == "scene_setting":
+                    part_text = f"Setting: {part['content']}\n\n"
+                elif part["type"] == "dialogue":
+                    part_text = f"{part['character']}: {part['content']}\n\n"
+                elif part["type"] == "direction":
+                    part_text = f"[Direction: {part['content']}]\n\n"
+                
+                # Check if adding this part would exceed max chunk size
+                if current_length + len(part_text) > max_chunk_size:
+                    # Save current chunk and start a new one
+                    chunks.append(current_chunk.strip())
+                    current_chunk = f"(Continued) {scene_id}\n\n{part_text}"
+                    current_length = len(current_chunk)
+                else:
+                    current_chunk += part_text
+                    current_length += len(part_text)
+            
+            # Add the final chunk from this scene
+            if current_chunk.strip():
+                chunks.append(current_chunk.strip())
+        
+        return chunks
+    
+    def chunk(self, text, max_chunk_size=1000):
+        """Main interface method that returns chunks of the play."""
+        # First try structural chunking
+        chunks = self.chunk_by_structure(text, max_chunk_size)
+        
+        # If structural chunking failed or produced too few chunks, fallback to basic chunking
+        if not chunks or len(chunks) < 5:
+            print("Structural chunking failed, falling back to basic chunking")
+            basic_chunker = TextChunker(max_chunk_size)
+            chunks = basic_chunker.chunk(text)
+        
+        return chunks
+
 class RAGPipeline:
-    def __init__(self, source_text=None, collection_name="hamlet_chunks"):
-        self.chunker = TextChunker()
+    def __init__(self, source_text=None, collection_name="hamlet_chunks", use_shakespeare_chunker=True):
+        # Use Shakespeare-specific chunker if requested
+        self.chunker = ShakespeareChunker() if use_shakespeare_chunker else TextChunker()
         self.vector_store = VectorStore()
         self.generator = LLMGenerator()
         self.collection_name = collection_name
@@ -197,8 +316,9 @@ def main():
     print("Loading Hamlet text...")
     hamlet_text = gutenberg.raw('shakespeare-hamlet.txt')
     
-    # Create and initialize the RAG pipeline
-    rag = RAGPipeline(hamlet_text)
+    # Create and initialize the RAG pipeline with Shakespeare-specific chunking
+    print("Initializing RAG pipeline with Shakespeare-specific text chunking...")
+    rag = RAGPipeline(hamlet_text, use_shakespeare_chunker=True)
     
     # Start interactive mode
     rag.interactive_mode()

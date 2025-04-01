@@ -57,6 +57,9 @@ class VectorStore:
         
         # Load cached embeddings if available
         self._load_embedding_cache()
+        
+        # For re-ranking
+        self.cross_encoder = None
     
     def _cache_path(self):
         """Get the path for the embedding cache file."""
@@ -123,8 +126,8 @@ class VectorStore:
             self.collection = self.create_collection(collection_name)
         return self.collection
     
-    def index_documents(self, chunks, collection_name="document_chunks"):
-        """Index documents with cached embeddings."""
+    def index_documents(self, chunks, metadata=None, collection_name="document_chunks"):
+        """Index documents with metadata and cached embeddings."""
         print(f"Indexing {len(chunks)} documents into collection '{collection_name}'...")
         self.get_collection(collection_name)
         
@@ -152,6 +155,11 @@ class VectorStore:
         new_chunks = [chunks[i] for i in new_indices]
         new_ids = [doc_ids[i] for i in new_indices]
         
+        # Include metadata if provided
+        new_metadata = None
+        if metadata:
+            new_metadata = [metadata[i] for i in new_indices]
+        
         print(f"Generating embeddings for {len(new_chunks)} new documents...")
         
         # Generate embeddings with cache
@@ -160,34 +168,91 @@ class VectorStore:
             embedding = self.get_embedding(chunk)
             embeddings.append(embedding.tolist())
         
-        # Add to collection
-        self.collection.add(
-            documents=new_chunks,
-            embeddings=embeddings,
-            ids=new_ids
-        )
+        # Add to collection with metadata
+        if new_metadata:
+            self.collection.add(
+                documents=new_chunks,
+                embeddings=embeddings,
+                metadatas=new_metadata,
+                ids=new_ids
+            )
+        else:
+            self.collection.add(
+                documents=new_chunks,
+                embeddings=embeddings,
+                ids=new_ids
+            )
         
         # Save cache after indexing
         self._save_embedding_cache()
         
         print(f"Indexed {len(new_chunks)} new documents into collection '{collection_name}'")
     
-    def retrieve(self, query, top_k=3):
-        """Retrieve relevant documents."""
+    def _load_cross_encoder(self):
+        """Load cross-encoder model for re-ranking."""
+        if self.cross_encoder is None:
+            try:
+                from sentence_transformers import CrossEncoder
+                print("Loading cross-encoder model for re-ranking...")
+                self.cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
+                print("Cross-encoder model loaded.")
+            except Exception as e:
+                print(f"Failed to load cross-encoder: {e}")
+                print("Continuing without re-ranking.")
+    
+    def retrieve(self, query, top_k=3, rerank=True, rerank_top_k=10):
+        """Retrieve relevant documents with optional re-ranking."""
         if not self.collection:
             raise ValueError("No collection selected. Call get_collection() first.")
         
-        # Embed the query (without caching, as queries change often)
+        # Embed the query
         query_embedding = self.model.encode([query])
         
-        # Query for similar chunks
+        # First retrieval phase - get more documents than needed for re-ranking
+        k_retrieval = rerank_top_k if rerank else top_k
         results = self.collection.query(
             query_embeddings=query_embedding.tolist(),
-            n_results=top_k
+            n_results=k_retrieval,
+            include=["documents", "metadatas", "distances"]
         )
         
-        # Return relevant chunks
-        return results['documents'][0]
+        documents = results['documents'][0]
+        metadatas = results.get('metadatas', [[None] * len(documents)])[0]
+        distances = results.get('distances', [[0] * len(documents)])[0]
+        
+        # If re-ranking is enabled and we have documents to re-rank
+        if rerank and len(documents) > top_k:
+            try:
+                self._load_cross_encoder()
+                if self.cross_encoder:
+                    # Prepare pairs for cross-encoder
+                    pairs = [[query, doc] for doc in documents]
+                    
+                    # Get cross-encoder scores
+                    print("Re-ranking with cross-encoder...")
+                    scores = self.cross_encoder.predict(pairs)
+                    
+                    # Sort documents by cross-encoder score
+                    scored_results = list(zip(documents, metadatas, scores))
+                    scored_results.sort(key=lambda x: x[2], reverse=True)
+                    
+                    # Take top_k after re-ranking
+                    documents = [item[0] for item in scored_results[:top_k]]
+                    metadatas = [item[1] for item in scored_results[:top_k]]
+                    
+                    print(f"Re-ranked to top {top_k} documents")
+            except Exception as e:
+                print(f"Re-ranking failed: {e}")
+                print("Using original ranking")
+                # Just take the top_k from the original results
+                documents = documents[:top_k]
+                metadatas = metadatas[:top_k]
+        elif len(documents) > top_k:
+            # Limit to top_k if we're not re-ranking
+            documents = documents[:top_k]
+            metadatas = metadatas[:top_k]
+        
+        return {"documents": documents, "metadatas": metadatas}
 
 class LLMGenerator:
     def __init__(self):
@@ -413,7 +478,7 @@ class RAGPipeline:
         print(f"Created {len(chunks)} chunks")
         
         print("Indexing chunks...")
-        self.vector_store.index_documents(chunks, self.collection_name)
+        self.vector_store.index_documents(chunks, metadata, self.collection_name)
         print("Indexing complete")
     
     def process_query(self, query, top_k=3):
@@ -424,15 +489,15 @@ class RAGPipeline:
         
         # Retrieve relevant chunks
         print(f"Retrieving top {top_k} relevant chunks...")
-        chunks = self.vector_store.retrieve(query, top_k)
+        results = self.vector_store.retrieve(query, top_k)
         
         # Generate answer
         print("Generating answer...")
-        answer = self.generator.generate(query, chunks)
+        answer = self.generator.generate(query, results["documents"])
         
         return {
             "query": query,
-            "chunks": chunks,
+            "results": results,
             "answer": answer
         }
     
@@ -451,9 +516,9 @@ class RAGPipeline:
                 result = self.process_query(query)
                 
                 print("\n----- Retrieved Context -----")
-                for i, chunk in enumerate(result["chunks"], 1):
-                    # Show a snippet of each chunk (first 100 chars)
-                    print(f"Chunk {i}: {chunk[:100].replace('\n', ' ')}...")
+                for i, doc in enumerate(result["results"]["documents"], 1):
+                    # Show a snippet of each document (first 100 chars)
+                    print(f"Document {i}: {doc[:100].replace('\n', ' ')}...")
                 
                 print("\n----- Answer -----")
                 # Print the full answer

@@ -1,6 +1,10 @@
 import streamlit as st
 import os
 import sys
+import nltk
+from nltk.corpus import gutenberg
+from sentence_transformers import SentenceTransformer
+from openai import OpenAI
 
 # Display basic system information
 st.write("Python version:", sys.version)
@@ -8,11 +12,8 @@ st.write("Working directory:", os.getcwd())
 
 # Try importing required packages
 try:
-    import nltk
     import chromadb
-    from openai import OpenAI
     from dotenv import load_dotenv
-    from nltk.corpus import gutenberg
     from sentence_transformers import SentenceTransformer
     
     # Indicate successful imports
@@ -39,50 +40,122 @@ if 'OPENAI_API_KEY' not in os.environ:
 # Download NLTK data
 @st.cache_resource
 def download_nltk_data():
-    try:
-        nltk.download('gutenberg', quiet=True)
-        return True
-    except Exception as e:
-        st.error(f"Error downloading NLTK data: {e}")
-        return False
+    nltk.download('gutenberg', quiet=True)
+    return True
 
-# Call the download function
-nltk_download_success = download_nltk_data()
-if not nltk_download_success:
-    st.error("Failed to download NLTK data. Please try again later.")
-    st.stop()
+# Initialize NLTK
+download_nltk_data()
 
-# Import your RAG pipeline class
-# If ophelia.py is in the same directory, import it directly
-try:
-    # First, add current directory to path
-    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-    
-    # Try to import the RAGPipeline class
-    from ophelia import RAGPipeline
-    st.success("Successfully imported RAGPipeline from ophelia.py")
-    
-except ImportError as e:
-    st.error(f"Error importing RAGPipeline: {e}")
-    st.info("Define the RAGPipeline class directly in this file as a fallback")
-    
-    # FALLBACK: Define a simplified version of your RAG system here
-    # (Copy the essential parts of your RAG system here)
-    
-    # Example placeholder:
-    class RAGPipeline:
-        def __init__(self, source_text=None, collection_name="hamlet_chunks", 
-                     use_shakespeare_chunker=True, persist_path="./vector_db"):
-            st.error("Using placeholder RAGPipeline class - this is not functional")
-            pass
-        
-        def process_query(self, query, top_k=3):
-            return {
-                "answer": "RAG system is not properly initialized. Please check the logs.",
-                "formatted_contexts": ["Context error"]
-            }
+# Load Hamlet text
+@st.cache_data
+def get_hamlet_text():
+    return gutenberg.raw('shakespeare-hamlet.txt')
 
-# The rest of your Streamlit app code...
+# Simple text chunking
+@st.cache_data
+def chunk_text(text, chunk_size=1000):
+    chunks = []
+    for i in range(0, len(text), chunk_size):
+        chunks.append(text[i:i+chunk_size])
+    return chunks
+
+# Sentence transformer for embeddings
+@st.cache_resource
+def load_model():
+    return SentenceTransformer("all-MiniLM-L6-v2")
+
+# Simple semantic search
+def search_chunks(query, chunks, model, top_k=3):
+    # Encode query and chunks
+    query_embedding = model.encode([query])[0]
+    chunk_embeddings = model.encode(chunks)
+    
+    # Calculate similarity
+    from sklearn.metrics.pairwise import cosine_similarity
+    similarities = cosine_similarity([query_embedding], chunk_embeddings)[0]
+    
+    # Get top_k chunks
+    top_indices = similarities.argsort()[-top_k:][::-1]
+    return [chunks[i] for i in top_indices]
+
+# OpenAI client
+def get_openai_client():
+    api_key = os.getenv("OPENAI_API_KEY", st.secrets.get("OPENAI_API_KEY", ""))
+    if not api_key:
+        st.error("OpenAI API key not found!")
+        st.stop()
+    return OpenAI(api_key=api_key)
+
+# Generate answer
+def generate_answer(query, contexts, client):
+    prompt = f"""
+    You are a helpful assistant answering questions about Shakespeare's Hamlet.
+    Use the following context to answer the question:
+    
+    Context:
+    {' '.join(contexts)}
+    
+    Question: {query}
+    
+    Answer:
+    """
+    
+    response = client.completions.create(
+        model="gpt-3.5-turbo-instruct",
+        prompt=prompt,
+        max_tokens=500,
+        temperature=0.7
+    )
+    
+    return response.choices[0].text.strip()
+
+# Streamlit UI
+st.title("Shakespeare's Digital Wisdom")
+st.markdown("### Ask questions about Hamlet and get AI-powered answers")
+
+# Sidebar with app information
+with st.sidebar:
+    st.header("About this App")
+    st.markdown("""
+    This app uses Retrieval-Augmented Generation (RAG) to answer questions about Shakespeare's Hamlet.
+    
+    **Try asking questions like:**
+    - What is Hamlet's relationship with Ophelia?
+    - Explain the "To be or not to be" soliloquy.
+    - What happens in Act 3, Scene 1?
+    """)
+    
+    top_k = st.slider("Number of chunks to retrieve", 1, 5, 3)
+
+# Load data and model
+with st.spinner("Loading Hamlet text and model..."):
+    hamlet_text = get_hamlet_text()
+    chunks = chunk_text(hamlet_text)
+    model = load_model()
+    openai_client = get_openai_client()
+
+# Main query interface
+query = st.text_input("Ask a question about Hamlet:", 
+                     placeholder="e.g., What is the main theme of Hamlet?")
+
+if query:
+    # Process query
+    with st.spinner("Searching for relevant information..."):
+        relevant_chunks = search_chunks(query, chunks, model, top_k=top_k)
+    
+    # Display chunks if wanted
+    with st.expander("View relevant text chunks"):
+        for i, chunk in enumerate(relevant_chunks, 1):
+            st.markdown(f"**Chunk {i}**")
+            st.text(chunk[:300] + "...")
+    
+    # Generate answer
+    with st.spinner("Generating answer..."):
+        answer = generate_answer(query, relevant_chunks, openai_client)
+    
+    # Display answer
+    st.markdown("### Answer:")
+    st.markdown(answer)
 
 # Page configuration
 st.set_page_config(

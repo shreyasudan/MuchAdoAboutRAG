@@ -37,6 +37,90 @@ DATA_DIR.mkdir(exist_ok=True)
 HAMLET_FILE = DATA_DIR / "hamlet.txt"
 CHUNKS_FILE = DATA_DIR / "hamlet_chunks.json"
 
+# Function to chunk the text by scenes (fixed version)
+def chunk_by_scenes(text, max_chunk_size=1500):
+    # Make sure we have content
+    if not text or len(text) < 100:
+        print(f"Warning: Text is too short to chunk: {len(text)} characters")
+        return [text]
+    
+    # Add debugging
+    print(f"Text length: {len(text)} characters")
+    
+    # Split by acts/scenes with a more robust pattern
+    scene_pattern = re.compile(r'(ACT [IVX]+\.[\s]*SCENE [IVX]+\.)', re.DOTALL | re.IGNORECASE)
+    
+    # Print the first match to verify pattern works
+    first_match = scene_pattern.search(text)
+    if first_match:
+        print(f"First scene match: {first_match.group(0)}")
+    else:
+        print("No scene matches found! Using fallback chunking.")
+        return simple_chunk(text, max_chunk_size)
+    
+    # Split the text
+    scenes = scene_pattern.split(text)
+    print(f"Split into {len(scenes)} segments")
+    
+    # Debug the split
+    for i, segment in enumerate(scenes[:3]):  # Show first 3 segments
+        print(f"Segment {i}: {segment[:50]}...")
+    
+    # Clean up and join headers with content
+    chunks = []
+    current_header = ""
+    
+    for i, section in enumerate(scenes):
+        if scene_pattern.match(section):
+            current_header = section.strip()
+            print(f"Found header: {current_header}")
+        elif section.strip() and current_header:
+            # Chunk large scenes further if needed
+            scene_text = section
+            if len(scene_text) > max_chunk_size:
+                # Use a sliding window if the scene is too large
+                for j in range(0, len(scene_text), max_chunk_size // 2):
+                    end_idx = min(j + max_chunk_size, len(scene_text))
+                    sub_chunk = scene_text[j:end_idx]
+                    chunks.append(f"{current_header}\n\n{sub_chunk}")
+            else:
+                chunks.append(f"{current_header}\n\n{scene_text}")
+    
+    # Fallback to simple chunking if no scenes were identified
+    if not chunks:
+        print("No chunks created with scene pattern. Using fallback chunking.")
+        return simple_chunk(text, max_chunk_size)
+    
+    print(f"Created {len(chunks)} chunks with scene pattern")
+    return chunks
+
+# Simple fallback chunking function
+def simple_chunk(text, max_chunk_size=1500):
+    chunks = []
+    
+    # Split by double newlines to try to preserve paragraph structure
+    paragraphs = text.split("\n\n")
+    
+    current_chunk = ""
+    for paragraph in paragraphs:
+        if len(current_chunk) + len(paragraph) <= max_chunk_size:
+            current_chunk += paragraph + "\n\n"
+        else:
+            if current_chunk:
+                chunks.append(current_chunk.strip())
+            current_chunk = paragraph + "\n\n"
+    
+    if current_chunk:
+        chunks.append(current_chunk.strip())
+    
+    # If still no chunks (extremely unlikely), force split by size
+    if not chunks:
+        for i in range(0, len(text), max_chunk_size):
+            chunks.append(text[i:i+max_chunk_size])
+    
+    print(f"Created {len(chunks)} chunks with simple chunking")
+    return chunks
+
 # Load or download Hamlet text
 @app.on_event("startup")
 async def load_hamlet():
@@ -45,22 +129,42 @@ async def load_hamlet():
     # Download Hamlet if needed
     if not HAMLET_FILE.exists():
         print("Downloading Hamlet text...")
-        url = "https://www.gutenberg.org/files/1524/1524-0.txt"
-        response = requests.get(url)
-        response.raise_for_status()
-        
-        text = response.text
-        # Clean up the Project Gutenberg header/footer
-        text = re.sub(r'^.*?ACT I\.', 'ACT I.', text, flags=re.DOTALL)
-        text = re.sub(r'THE END.*$', 'THE END.', text, flags=re.DOTALL)
-        
-        with open(HAMLET_FILE, "w", encoding="utf-8") as f:
-            f.write(text)
-        print("Hamlet text downloaded and saved.")
+        try:
+            url = "https://www.gutenberg.org/files/1524/1524-0.txt"
+            response = requests.get(url)
+            response.raise_for_status()
+            
+            text = response.text
+            print(f"Downloaded {len(text)} characters")
+            
+            # Use a simple pattern to find the start of Act 1
+            act1_match = re.search(r'ACT I\.', text)
+            if act1_match:
+                start_idx = act1_match.start()
+                text = text[start_idx:]
+                print(f"Trimmed to {len(text)} characters starting at 'ACT I.'")
+            
+            # Use a simple pattern to find the end
+            end_match = re.search(r'THE END', text)
+            if end_match:
+                end_idx = end_match.end()
+                text = text[:end_idx]
+                print(f"Trimmed to {len(text)} characters ending at 'THE END'")
+            
+            with open(HAMLET_FILE, "w", encoding="utf-8") as f:
+                f.write(text)
+            print("Hamlet text downloaded and saved.")
+        except Exception as e:
+            print(f"Error downloading Hamlet: {e}")
+            # Provide a minimal fallback text
+            text = "ACT I. SCENE I. Hamlet is a tragedy by William Shakespeare."
+            with open(HAMLET_FILE, "w", encoding="utf-8") as f:
+                f.write(text)
     else:
         print("Loading existing Hamlet text file.")
         with open(HAMLET_FILE, "r", encoding="utf-8") as f:
             text = f.read()
+        print(f"Loaded {len(text)} characters from file")
     
     # Use pre-chunked data or create basic chunks
     if CHUNKS_FILE.exists():
@@ -74,33 +178,10 @@ async def load_hamlet():
             json.dump(chunks, f, indent=2)
     
     print(f"Loaded {len(chunks)} chunks from Hamlet")
-
-# Function to chunk the text by scenes
-def chunk_by_scenes(text, max_chunk_size=1500):
-    # Split by acts/scenes
-    scene_pattern = re.compile(r'(ACT [IVX]+\.\s+SCENE [IVX]+\.)', re.DOTALL)
-    scenes = scene_pattern.split(text)
-    
-    # Clean up and join headers with content
-    chunks = []
-    current_header = ""
-    
-    for i, section in enumerate(scenes):
-        if scene_pattern.match(section):
-            current_header = section.strip()
-        elif section.strip() and current_header:
-            # Chunk large scenes further if needed
-            scene_text = section
-            if len(scene_text) > max_chunk_size:
-                # Use a sliding window if the scene is too large
-                for j in range(0, len(scene_text), max_chunk_size // 2):
-                    end_idx = min(j + max_chunk_size, len(scene_text))
-                    sub_chunk = scene_text[j:end_idx]
-                    chunks.append(f"{current_header}\n\n{sub_chunk}")
-            else:
-                chunks.append(f"{current_header}\n\n{scene_text}")
-    
-    return chunks
+    if len(chunks) == 0:
+        print("WARNING: No chunks were created. Check the text format and chunking logic.")
+        # Create at least one emergency chunk so the API doesn't fail completely
+        chunks = ["Hamlet is a tragedy by William Shakespeare."]
 
 # Simple in-memory keyword search (no embeddings)
 def keyword_search(query, chunks, top_k=3):
@@ -183,6 +264,16 @@ async def query_hamlet(request: QueryRequest):
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "chunks_loaded": len(chunks) if 'chunks' in globals() else 0}
+
+# Adding a root endpoint for health checks
+@app.get("/")
+async def root():
+    return {
+        "status": "healthy", 
+        "message": "Shakespeare's Digital Wisdom API is running. Use /query endpoint to ask questions.",
+        "chunks_loaded": len(chunks) if 'chunks' in globals() else 0,
+        "documentation": "/docs"
+    }
 
 # Run the application with: uvicorn app:app --host 0.0.0.0 --port 8000
 if __name__ == "__main__":

@@ -1,183 +1,156 @@
+/* Dark / Red Shakespearean Theme  
+   SELECTED PALETTE:
+   background: #1E1E1E (dark gray/black)
+   text: #ECECEC or #EDEDED
+   accent red: #B22222
+*/
+
+/* Use the Shakespearean font (Cormorant Garamond) */
 body {
-    background-color: #f8f9fa;
-    font-family: 'Georgia', serif;
-    overflow-x: hidden;
+  background-color: #1E1E1E;
+  font-family: "Cormorant Garamond", serif;
+  color: #EDEDED;
+  overflow-x: hidden;
 }
 
-.container {
-    max-width: 1200px;
+/* Basic classes for text colors */
+.text-red {
+  color: #B22222 !important;
+}
+.btn-red {
+  background-color: #B22222;
+  border-color: #B22222;
+}
+.btn-red:hover {
+  background-color: #a01f1f;
+  border-color: #a01f1f;
 }
 
-h1, h2, h3, h4, h5, h6 {
-    font-family: 'Playfair Display', 'Georgia', serif;
+/* Dark horizontal rule */
+.hr-dark {
+  border-top: 1px solid #444;
 }
 
-/* Sidebar styles */
+/* Sidebar styling */
 .sidebar {
-    height: 100vh;
-    position: fixed;
-    top: 0;
-    left: 0;
-    overflow-y: auto;
-    transition: transform 0.3s ease;
-    z-index: 1000;
-    box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+  background-color: #111;
+  border-right: 1px solid #444;
+  box-shadow: 4px 0 10px rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+  position: relative;
 }
 
-.sidebar-toggle-btn {
-    position: absolute;
-    right: -30px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 30px;
-    height: 60px;
-    background-color: #f8f9fa;
-    border: 1px solid #dee2e6;
-    border-left: none;
-    border-radius: 0 5px 5px 0;
-    box-shadow: 3px 0 5px rgba(0,0,0,0.1);
-    z-index: 1001;
-}
-
-.sidebar-hidden {
-    transform: translateX(-100%);
-}
-
-/* Main content area */
-.main-content {
-    min-height: 100vh;
-    transition: margin-left 0.3s ease;
-}
-
-/* Answer styles */
-#answer-display {
-    white-space: pre-line;
-    line-height: 1.6;
+/* Sidebar header */
+.sidebar-header {
+  color: #EDEDED;
+  background-color: #B22222;
+  border-bottom: 1px solid #444;
+  position: relative;
 }
 
 /* History list */
 .history-list {
-    max-height: calc(100vh - 60px);
-    overflow-y: auto;
+  border: none;
+  background-color: transparent;
 }
 
-.history-item {
-    cursor: pointer;
-    transition: background-color 0.2s ease;
-    border-left: 3px solid transparent;
-    padding: 10px;
+.history-list .list-group-item {
+  background-color: #111;
+  color: #EDEDED;
+  border: none;
+  border-left: 3px solid transparent;
+  transition: background-color 0.2s ease;
 }
 
-.history-item:hover {
-    background-color: #f0f0f0;
-    border-left-color: #0d6efd;
+.history-list .list-group-item:hover {
+  background-color: #1e1e1e;
+  border-left-color: #B22222;
 }
 
-.history-question {
-    font-weight: bold;
-    font-size: 0.95rem;
+/* Mobile sidebar toggle */
+.sidebar-toggle-btn {
+  position: absolute;
+  right: -30px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 30px;
+  height: 60px;
+  background-color: #111;
+  border: 1px solid #444;
+  border-left: none;
+  border-radius: 0 5px 5px 0;
+  box-shadow: 3px 0 5px rgba(0, 0, 0, 0.4);
+  z-index: 1001;
+  transition: transform 0.3s ease;
+}
+.sidebar-hidden {
+  transform: translateX(-100%);
 }
 
-.history-snippet {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    color: #6c757d;
-    font-size: 0.85rem;
+/* Main content */
+.main-content {
+  min-height: 100vh;
+  transition: margin-left 0.3s ease;
 }
 
-/* Search suggestions */
+/* Card / container styling */
+.card.bg-dark {
+  background-color: #2a2a2a !important;
+  border: 1px solid #444;
+}
+.card-header.bg-secondary,
+.card-footer.bg-secondary {
+  background-color: #333 !important;
+}
+.input-group .form-control.bg-secondary {
+  border-color: #444;
+}
+
+/* Suggestions */
 .search-suggestions {
-    position: absolute;
-    width: 100%;
-    background: white;
-    border: 1px solid #dee2e6;
-    border-radius: 0 0 5px 5px;
-    box-shadow: 0 5px 10px rgba(0,0,0,0.1);
-    margin-top: 5px;
-    z-index: 1000;
-    max-height: 300px;
-    overflow-y: auto;
+  position: absolute;
+  width: 100%;
+  border: 1px solid #444;
+  border-top: none;
+  border-radius: 0 0 5px 5px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+  margin-top: 5px;
+  z-index: 1000;
+  max-height: 240px;
+  overflow-y: auto;
+  transition: all 0.2s ease;
 }
 
 .suggestions-header {
-    padding: 10px 15px;
-    border-bottom: 1px solid #eee;
+  background-color: #2a2a2a;
 }
-
 .suggestion-item {
-    padding: 10px 15px;
-    cursor: pointer;
-    transition: background-color 0.2s;
+  padding: 10px 15px;
+  cursor: pointer;
+  transition: background-color 0.2s;
 }
-
 .suggestion-item:hover {
-    background-color: #f8f9fa;
+  background-color: #3a3a3a;
 }
 
-/* Mobile responsiveness */
+/* Loading spinner color override */
+.spinner-border.text-red {
+  color: #B22222 !important;
+}
+
+/* Chat answer display */
+#answer-display {
+  white-space: pre-line;
+  line-height: 1.6;
+}
+
+/* Responsive design */
 @media (max-width: 767.98px) {
-    .sidebar {
-        width: 80%;
-        max-width: 300px;
-    }
-    
-    .main-content {
-        margin-left: 0 !important;
-    }
-}
-
-/* Custom scrollbar */
-::-webkit-scrollbar {
-    width: 8px;
-}
-
-::-webkit-scrollbar-track {
-    background: #f1f1f1;
-}
-
-::-webkit-scrollbar-thumb {
-    background: #ccc;
-    border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-    background: #aaa;
-}
-
-.sample-question {
-    cursor: pointer;
-    transition: background-color 0.2s ease;
-}
-
-.sample-question:hover {
-    background-color: #f0f0f0;
-    text-decoration: underline;
-}
-
-#conversation-history {
-    max-height: 600px;
-    overflow-y: auto;
-}
-
-.history-item {
-    cursor: pointer;
-    transition: background-color 0.2s ease;
-    border-left: 3px solid transparent;
-}
-
-.history-item:hover {
-    background-color: #f0f0f0;
-    border-left-color: #0d6efd;
-}
-
-.history-question {
-    font-weight: bold;
-}
-
-.history-snippet {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    color: #6c757d;
+  .sidebar {
+    width: 80%;
+    max-width: 300px;
+  }
+  .main-content {
+    margin-left: 0 !important;
+  }
 } 

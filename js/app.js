@@ -26,6 +26,16 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Event Listeners
     askButton.addEventListener('click', handleAskQuestion);
+    questionInput.addEventListener('focus', function() {
+        if (questionInput.value.trim() === '') {
+            searchSuggestions.classList.remove('d-none');
+        }
+    });
+    questionInput.addEventListener('input', function() {
+        if (questionInput.value.trim() !== '') {
+            searchSuggestions.classList.add('d-none');
+        }
+    });
     questionInput.addEventListener('keypress', function(e) {
         if (e.key === 'Enter') {
             handleAskQuestion();
@@ -48,22 +58,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Search suggestions
-    questionInput.addEventListener('focus', function() {
-        if (!answerContainer.classList.contains('d-none') || 
-            !errorContainer.classList.contains('d-none')) {
-            return;
-        }
-        searchSuggestions.classList.remove('d-none');
-    });
-    
-    // Hide suggestions when clicking outside
-    document.addEventListener('click', function(e) {
-        if (!questionInput.contains(e.target) && !searchSuggestions.contains(e.target)) {
-            searchSuggestions.classList.add('d-none');
-        }
-    });
-    
     // Handle suggestion selection
     suggestionItems.forEach(item => {
         item.addEventListener('click', function() {
@@ -71,6 +65,13 @@ document.addEventListener('DOMContentLoaded', function() {
             searchSuggestions.classList.add('d-none');
             handleAskQuestion();
         });
+    });
+    
+    // Hide suggestions when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!questionInput.contains(e.target) && !searchSuggestions.contains(e.target)) {
+            searchSuggestions.classList.add('d-none');
+        }
     });
     
     // Sample questions click handler
@@ -197,7 +198,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     function updateHistoryDisplay() {
         if (history.length === 0) {
-            conversationHistory.innerHTML = '<li class="list-group-item text-center text-muted">No questions yet</li>';
+            conversationHistory.innerHTML = '<li class="list-group-item text-center text-muted bg-dark text-light">No questions yet</li>';
             return;
         }
         
@@ -208,9 +209,9 @@ document.addEventListener('DOMContentLoaded', function() {
             li.className = 'list-group-item history-item';
             li.dataset.index = index;
             
-            // Create a snippet of the answer (first 60 chars)
-            const answerSnippet = item.answer.length > 60 
-                ? item.answer.substring(0, 60) + '...' 
+            // Create a snippet of the answer (first 50 chars)
+            const answerSnippet = item.answer.length > 50 
+                ? item.answer.substring(0, 50) + '...' 
                 : item.answer;
             
             // Format the date

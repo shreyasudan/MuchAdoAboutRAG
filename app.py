@@ -222,44 +222,70 @@ async def query_hamlet(request: QueryRequest):
         raise HTTPException(status_code=400, detail="Question cannot be empty")
     
     try:
+        # Limit question length to prevent token issues
+        question = request.question[:500]
+        
         # Get relevant chunks using simple keyword search
-        relevant_chunks = keyword_search(request.question, chunks)
+        relevant_chunks = keyword_search(question, chunks)
         
         # Format the context for the LLM
         formatted_context = "\n\n".join(relevant_chunks)
+        
+        # Limit context to prevent token limit errors
+        formatted_context = limit_context_tokens(formatted_context)
         
         # Generate the answer using older OpenAI API
         system_message = (
             "You are a helpful assistant that answers questions about Shakespeare's Hamlet. "
             "When referencing specific parts of the play, mention Act and Scene numbers. "
             "If you're unsure about something, say so rather than making up information. "
-            "Use formal language appropriate for discussing Shakespeare."
+            "Keep your answers concise but informative."  # Added instruction for brevity
         )
         
         user_message = (
-            f"Based on the following excerpts from Hamlet, answer the question:\n\n"
-            f"QUESTION: {request.question}\n\n"
+            f"Based on the following excerpts from Hamlet, answer this question concisely:\n\n"  # Added concisely
+            f"QUESTION: {question}\n\n"
             f"EXCERPTS FROM HAMLET:\n{formatted_context}\n\n"
             f"Provide a thoughtful answer with proper citations to Act and Scene when relevant."
         )
         
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": system_message},
-                {"role": "user", "content": user_message}
-            ],
-            max_tokens=600,
-            temperature=0.7
-        )
-        
-        answer = response.choices[0].message.content
+        try:
+            response = openai.ChatCompletion.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": system_message},
+                    {"role": "user", "content": user_message}
+                ],
+                max_tokens=500,  # Reduced from 600 to 500
+                temperature=0.7
+            )
+            
+            answer = response.choices[0].message.content
+        except Exception as openai_error:
+            if "maximum context length" in str(openai_error):
+                # If context is still too long, try with even less context
+                shortened_context = limit_context_tokens(formatted_context, max_tokens=6000)
+                response = openai.ChatCompletion.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {"role": "system", "content": system_message},
+                        {"role": "user", "content": f"QUESTION: {question}\n\nEXCERPTS FROM HAMLET (shortened):\n{shortened_context}"}
+                    ],
+                    max_tokens=400,
+                    temperature=0.7
+                )
+                answer = response.choices[0].message.content
+            else:
+                raise
         
         return {"answer": answer}
         
     except Exception as e:
         print(f"Error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
+        if "maximum context length" in str(e):
+            raise HTTPException(status_code=413, detail="The context is too large for this question. Please ask a more specific question.")
+        else:
+            raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
 
 @app.get("/health")
 async def health_check():
@@ -274,6 +300,28 @@ async def root():
         "chunks_loaded": len(chunks) if 'chunks' in globals() else 0,
         "documentation": "/docs"
     }
+
+# Add this function to your app.py
+def limit_context_tokens(context, max_tokens=12000):
+    """Limit the context to approximately max_tokens."""
+    # Very rough estimation: 1 token ≈ 4 characters for English text
+    chars_per_token = 4
+    max_chars = max_tokens * chars_per_token
+    
+    if len(context) <= max_chars:
+        return context
+    
+    # Try to cut at paragraph boundaries
+    paragraphs = context.split("\n\n")
+    limited_context = ""
+    
+    for paragraph in paragraphs:
+        if len(limited_context) + len(paragraph) + 2 <= max_chars:
+            limited_context += paragraph + "\n\n"
+        else:
+            break
+    
+    return limited_context
 
 # Run the application with: uvicorn app:app --host 0.0.0.0 --port 8000
 if __name__ == "__main__":

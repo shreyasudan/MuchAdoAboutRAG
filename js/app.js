@@ -15,6 +15,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const clearHistoryBtn = document.getElementById('clear-history-btn');
     const copyAnswerBtn = document.getElementById('copy-answer-btn');
     const sampleQuestions = document.querySelectorAll('.sample-question');
+    const searchSuggestions = document.getElementById('search-suggestions');
+    const suggestionItems = document.querySelectorAll('.suggestion-item');
+    const sidebar = document.getElementById('sidebar');
+    const sidebarToggle = document.getElementById('sidebar-toggle');
     
     // Initialize conversation history from localStorage
     let history = JSON.parse(localStorage.getItem('conversationHistory')) || [];
@@ -31,6 +35,44 @@ document.addEventListener('DOMContentLoaded', function() {
     clearHistoryBtn.addEventListener('click', clearHistory);
     copyAnswerBtn.addEventListener('click', copyAnswerToClipboard);
     
+    // Sidebar toggle
+    sidebarToggle.addEventListener('click', function() {
+        sidebar.classList.toggle('sidebar-hidden');
+        
+        // Change the icon
+        const icon = this.querySelector('i');
+        if (sidebar.classList.contains('sidebar-hidden')) {
+            icon.classList.replace('bi-chevron-left', 'bi-chevron-right');
+        } else {
+            icon.classList.replace('bi-chevron-right', 'bi-chevron-left');
+        }
+    });
+    
+    // Search suggestions
+    questionInput.addEventListener('focus', function() {
+        if (!answerContainer.classList.contains('d-none') || 
+            !errorContainer.classList.contains('d-none')) {
+            return;
+        }
+        searchSuggestions.classList.remove('d-none');
+    });
+    
+    // Hide suggestions when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!questionInput.contains(e.target) && !searchSuggestions.contains(e.target)) {
+            searchSuggestions.classList.add('d-none');
+        }
+    });
+    
+    // Handle suggestion selection
+    suggestionItems.forEach(item => {
+        item.addEventListener('click', function() {
+            questionInput.value = this.dataset.value;
+            searchSuggestions.classList.add('d-none');
+            handleAskQuestion();
+        });
+    });
+    
     // Sample questions click handler
     sampleQuestions.forEach(question => {
         question.addEventListener('click', function() {
@@ -44,12 +86,24 @@ document.addEventListener('DOMContentLoaded', function() {
         const question = questionInput.value.trim();
         if (!question) return;
         
+        // Hide search suggestions
+        searchSuggestions.classList.add('d-none');
+        
         // Show loading, hide previous results
         loadingContainer.classList.remove('d-none');
         answerContainer.classList.add('d-none');
         errorContainer.classList.add('d-none');
         
+        // Disable button and show loading state
+        askButton.disabled = true;
+        askButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Thinking...';
+        
         try {
+            // Check if question is too long (to prevent token limit errors)
+            if (question.length > 500) {
+                throw new Error("Question is too long. Please limit to 500 characters.");
+            }
+            
             const response = await fetch(API_ENDPOINT, {
                 method: 'POST',
                 headers: {
@@ -59,7 +113,11 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             
             if (!response.ok) {
-                throw new Error(`Server responded with status: ${response.status}`);
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(
+                    errorData.detail || 
+                    `Server error: ${response.status} ${response.statusText}`
+                );
             }
             
             const data = await response.json();
@@ -73,11 +131,33 @@ document.addEventListener('DOMContentLoaded', function() {
             // Add to history
             addToHistory(question, data.answer);
             
+            // On mobile, hide sidebar after getting an answer
+            if (window.innerWidth < 768) {
+                sidebar.classList.add('sidebar-hidden');
+                const icon = sidebarToggle.querySelector('i');
+                icon.classList.replace('bi-chevron-left', 'bi-chevron-right');
+            }
+            
         } catch (error) {
             console.error('Error:', error);
-            errorMessage.textContent = `Error: ${error.message || 'Something went wrong. Please try again.'}`;
+            
+            // Show helpful error message based on error type
+            if (error.message.includes('Failed to fetch')) {
+                errorMessage.textContent = 'Cannot connect to server. Please check your internet connection and try again.';
+            } else if (error.message.includes('429')) {
+                errorMessage.textContent = 'Too many requests. Please wait a moment and try again.';
+            } else if (error.message.includes('token')) {
+                errorMessage.textContent = 'The answer would be too long. Please ask a more specific question.';
+            } else {
+                errorMessage.textContent = `Error: ${error.message || 'Something went wrong. Please try again.'}`;
+            }
+            
             errorContainer.classList.remove('d-none');
+            
         } finally {
+            // Reset button state
+            askButton.disabled = false;
+            askButton.innerHTML = '<i class="bi bi-search me-1"></i> Ask';
             loadingContainer.classList.add('d-none');
         }
     }
@@ -88,7 +168,7 @@ document.addEventListener('DOMContentLoaded', function() {
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
             .replace(/\*(.*?)\*/g, '<em>$1</em>')
             .replace(/\n\n/g, '<br><br>')
-            .replace(/Act (\d+), Scene (\d+)/gi, '<strong>Act $1, Scene $2</strong>');
+            .replace(/Act (\d+|[IVX]+), Scene (\d+|[IVX]+)/gi, '<strong>Act $1, Scene $2</strong>');
     }
     
     function getCurrentTimestamp() {
@@ -174,8 +254,12 @@ document.addEventListener('DOMContentLoaded', function() {
         // Also populate the question input
         questionInput.value = item.question;
         
-        // Scroll to the answer section
-        answerContainer.scrollIntoView({ behavior: 'smooth' });
+        // On mobile, hide sidebar after selection
+        if (window.innerWidth < 768) {
+            sidebar.classList.add('sidebar-hidden');
+            const icon = sidebarToggle.querySelector('i');
+            icon.classList.replace('bi-chevron-left', 'bi-chevron-right');
+        }
     }
     
     function clearHistory() {

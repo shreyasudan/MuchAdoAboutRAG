@@ -1,6 +1,7 @@
 body {
     background-color: #f8f9fa;
     font-family: 'Georgia', serif;
+    overflow-x: hidden;
 }
 
 .container {
@@ -11,9 +12,137 @@ h1, h2, h3, h4, h5, h6 {
     font-family: 'Playfair Display', 'Georgia', serif;
 }
 
+/* Sidebar styles */
+.sidebar {
+    height: 100vh;
+    position: fixed;
+    top: 0;
+    left: 0;
+    overflow-y: auto;
+    transition: transform 0.3s ease;
+    z-index: 1000;
+    box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+}
+
+.sidebar-toggle-btn {
+    position: absolute;
+    right: -30px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 30px;
+    height: 60px;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-left: none;
+    border-radius: 0 5px 5px 0;
+    box-shadow: 3px 0 5px rgba(0,0,0,0.1);
+    z-index: 1001;
+}
+
+.sidebar-hidden {
+    transform: translateX(-100%);
+}
+
+/* Main content area */
+.main-content {
+    min-height: 100vh;
+    transition: margin-left 0.3s ease;
+}
+
+/* Answer styles */
 #answer-display {
     white-space: pre-line;
     line-height: 1.6;
+}
+
+/* History list */
+.history-list {
+    max-height: calc(100vh - 60px);
+    overflow-y: auto;
+}
+
+.history-item {
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    border-left: 3px solid transparent;
+    padding: 10px;
+}
+
+.history-item:hover {
+    background-color: #f0f0f0;
+    border-left-color: #0d6efd;
+}
+
+.history-question {
+    font-weight: bold;
+    font-size: 0.95rem;
+}
+
+.history-snippet {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #6c757d;
+    font-size: 0.85rem;
+}
+
+/* Search suggestions */
+.search-suggestions {
+    position: absolute;
+    width: 100%;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 0 0 5px 5px;
+    box-shadow: 0 5px 10px rgba(0,0,0,0.1);
+    margin-top: 5px;
+    z-index: 1000;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.suggestions-header {
+    padding: 10px 15px;
+    border-bottom: 1px solid #eee;
+}
+
+.suggestion-item {
+    padding: 10px 15px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.suggestion-item:hover {
+    background-color: #f8f9fa;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 767.98px) {
+    .sidebar {
+        width: 80%;
+        max-width: 300px;
+    }
+    
+    .main-content {
+        margin-left: 0 !important;
+    }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #aaa;
 }
 
 .sample-question {

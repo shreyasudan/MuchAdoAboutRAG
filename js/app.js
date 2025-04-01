@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const sidebarToggle = document.getElementById('sidebar-toggle');
   
     // API endpoint
-    const API_ENDPOINT = 'https://your-render-app-name.onrender.com/query';
+    const API_ENDPOINT = 'https://muchadoaboutrag.onrender.com/query';
   
     // Initialize conversation history from localStorage
     let history = JSON.parse(localStorage.getItem('conversationHistory')) || [];
